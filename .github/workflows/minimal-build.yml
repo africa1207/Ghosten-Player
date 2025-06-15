@@ -1,0 +1,139 @@
+name: 最小化构建
+
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: '目标架构'
+        required: true
+        default: 'arm64'
+        type: choice
+        options:
+        - arm64
+        - arm32
+        - universal
+
+jobs:
+  minimal-build:
+    name: 最小化构建APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v4
+    
+    - name: ☕ 设置Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: 🐦 设置Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+    
+    - name: 📋 环境检查
+      run: |
+        flutter --version
+        flutter doctor
+    
+    - name: 🔧 Android配置
+      run: |
+        flutter config --android-sdk $ANDROID_SDK_ROOT
+        yes | flutter doctor --android-licenses || true
+    
+    - name: 🧹 清理
+      run: flutter clean
+    
+    - name: 📦 获取依赖
+      run: |
+        flutter pub get
+        cd packages/api && flutter pub get && cd ../..
+        cd packages/bluetooth && flutter pub get && cd ../..
+        cd packages/file_picker && flutter pub get && cd ../..
+        cd packages/video_player && flutter pub get && cd ../..
+    
+    - name: 🔨 构建APK
+      run: |
+        case "${{ github.event.inputs.architecture }}" in
+          "arm64")
+            echo "构建ARM64版本..."
+            flutter build apk --debug --target-platform android-arm64
+            ;;
+          "arm32")
+            echo "构建ARM32版本..."
+            flutter build apk --debug --target-platform android-arm
+            ;;
+          "universal")
+            echo "构建通用版本..."
+            flutter build apk --debug
+            ;;
+        esac
+    
+    - name: 📱 查找APK文件
+      run: |
+        echo "查找生成的APK文件..."
+        find . -name "*.apk" -type f
+        
+        echo "检查标准输出目录..."
+        ls -la build/app/outputs/flutter-apk/ || echo "标准输出目录不存在"
+        
+        echo "检查所有可能的位置..."
+        find build -name "*.apk" -type f || echo "build目录中未找到APK"
+        find android -name "*.apk" -type f || echo "android目录中未找到APK"
+    
+    - name: 📦 整理APK
+      run: |
+        mkdir -p output
+        TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+        ARCH="${{ github.event.inputs.architecture }}"
+        
+        # 查找并复制APK文件
+        if find build -name "*.apk" -type f | head -1 | read apk_file; then
+          echo "找到APK文件: $apk_file"
+          cp "$apk_file" "output/ghosten-player-${ARCH}-debug-${TIMESTAMP}.apk"
+          echo "✅ APK已复制到output目录"
+        else
+          echo "❌ 未找到APK文件"
+          
+          # 尝试手动构建
+          echo "尝试手动Gradle构建..."
+          cd android
+          ./gradlew assembleDebug --stacktrace || echo "Gradle构建也失败了"
+          
+          # 再次查找
+          find . -name "*.apk" -type f
+          cd ..
+        fi
+        
+        echo "输出目录内容:"
+        ls -la output/ || echo "output目录为空"
+    
+    - name: ⬆️ 上传APK
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: minimal-build-${{ github.event.inputs.architecture }}-${{ github.run_number }}
+        path: |
+          output/*.apk
+          build/app/outputs/flutter-apk/*.apk
+          android/app/build/outputs/apk/**/*.apk
+        retention-days: 30
+    
+    - name: 📊 构建报告
+      if: always()
+      run: |
+        echo "=== 构建报告 ==="
+        echo "目标架构: ${{ github.event.inputs.architecture }}"
+        echo "Flutter版本: $(flutter --version | head -1)"
+        echo "Java版本: $(java -version 2>&1 | head -1)"
+        
+        if [ -f "output/ghosten-player-*.apk" ]; then
+          echo "✅ 构建成功"
+          ls -la output/
+        else
+          echo "❌ 构建失败"
+          echo "请检查上传的artifacts中的调试信息"
+        fi

@@ -140,10 +140,20 @@ flutter run -d <device-id>
 
 ### 构建APK:
 ```bash
-# Debug版本
-flutter build apk --debug
+# 清理项目
+flutter clean
 
-# Release版本
+# 获取依赖
+flutter pub get
+
+# Debug版本（推荐先试这个）
+flutter build apk --debug --target-platform android-arm64
+
+# 如果上面成功，再试Release版本
+flutter build apk --release --target-platform android-arm64
+
+# 通用版本（文件较大但兼容性好）
+flutter build apk --debug
 flutter build apk --release
 
 # 分架构构建（减小文件大小）
@@ -153,6 +163,7 @@ flutter build apk --split-per-abi
 构建的APK文件位置：
 - Debug: `build/app/outputs/flutter-apk/app-debug.apk`
 - Release: `build/app/outputs/flutter-apk/app-release.apk`
+- ARM64: `build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk`
 
 ## 7. 常用调试命令
 

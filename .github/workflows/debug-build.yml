@@ -1,0 +1,161 @@
+name: 调试构建问题
+
+on:
+  workflow_dispatch:
+    inputs:
+      debug_level:
+        description: '调试级别'
+        required: true
+        default: 'verbose'
+        type: choice
+        options:
+        - verbose
+        - info
+
+jobs:
+  debug-build:
+    name: 调试构建
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v4
+    
+    - name: ☕ 设置Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: 🐦 设置Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+    
+    - name: 📋 显示详细环境信息
+      run: |
+        echo "=== 系统信息 ==="
+        uname -a
+        echo "=== Java信息 ==="
+        java -version
+        javac -version
+        echo "=== Flutter信息 ==="
+        flutter --version
+        flutter doctor -v
+        echo "=== Dart信息 ==="
+        dart --version
+        echo "=== Android SDK信息 ==="
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        ls -la $ANDROID_SDK_ROOT/ || echo "Android SDK目录不存在"
+        echo "==================="
+    
+    - name: 🔧 配置Android环境
+      run: |
+        echo "配置Android SDK..."
+        flutter config --android-sdk $ANDROID_SDK_ROOT
+        
+        echo "接受Android许可..."
+        yes | flutter doctor --android-licenses || true
+        
+        echo "检查Android工具..."
+        which adb || echo "adb未找到"
+        which aapt || echo "aapt未找到"
+    
+    - name: 🧹 清理项目
+      run: |
+        echo "清理Flutter项目..."
+        flutter clean
+        
+        echo "清理Android项目..."
+        cd android
+        ./gradlew clean || echo "Gradle清理失败"
+        cd ..
+    
+    - name: 📦 安装依赖
+      run: |
+        echo "安装主项目依赖..."
+        flutter pub get
+        
+        echo "安装子包依赖..."
+        for package in packages/*/; do
+          if [ -f "$package/pubspec.yaml" ]; then
+            echo "安装 $package 依赖..."
+            (cd "$package" && flutter pub get)
+          fi
+        done
+    
+    - name: 🔍 检查项目结构
+      run: |
+        echo "检查项目结构..."
+        ls -la
+        echo "检查Android目录..."
+        ls -la android/
+        echo "检查app目录..."
+        ls -la android/app/
+        echo "检查Gradle文件..."
+        cat android/gradle/wrapper/gradle-wrapper.properties
+        echo "检查build.gradle..."
+        head -20 android/app/build.gradle
+    
+    - name: 🔨 尝试Gradle构建
+      run: |
+        echo "进入Android目录..."
+        cd android
+        
+        echo "检查Gradle版本..."
+        ./gradlew --version
+        
+        echo "列出Gradle任务..."
+        ./gradlew tasks --all | head -50
+        
+        echo "尝试构建Debug APK..."
+        ./gradlew assembleDebug --stacktrace --info || echo "Gradle构建失败"
+        
+        echo "检查构建输出..."
+        find . -name "*.apk" -type f || echo "未找到APK文件"
+        
+        cd ..
+    
+    - name: 🔨 尝试Flutter构建
+      run: |
+        echo "尝试Flutter构建..."
+        flutter build apk --debug --verbose --target-platform android-arm64 || echo "Flutter构建失败"
+        
+        echo "检查构建输出目录..."
+        find build -type f -name "*.apk" || echo "未找到APK文件"
+        
+        echo "检查构建日志..."
+        ls -la build/ || echo "build目录不存在"
+        ls -la build/app/ || echo "build/app目录不存在"
+        ls -la build/app/outputs/ || echo "build/app/outputs目录不存在"
+    
+    - name: 📊 收集调试信息
+      if: always()
+      run: |
+        echo "=== 调试信息收集 ==="
+        echo "Flutter版本:"
+        flutter --version
+        
+        echo "Gradle版本:"
+        cd android && ./gradlew --version && cd ..
+        
+        echo "构建目录内容:"
+        find build -type f -name "*.apk" 2>/dev/null || echo "未找到APK文件"
+        
+        echo "Android构建目录:"
+        find android -type f -name "*.apk" 2>/dev/null || echo "Android目录中未找到APK文件"
+        
+        echo "错误日志:"
+        find . -name "*.log" -type f -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null || echo "未找到日志文件"
+    
+    - name: 📤 上传调试信息
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-info-${{ github.run_number }}
+        path: |
+          build/
+          android/build/
+          android/app/build/
+        retention-days: 7

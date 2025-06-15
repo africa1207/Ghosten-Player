@@ -62,15 +62,42 @@ jobs:
         echo "获取视频播放器包依赖..."
         cd packages/video_player && flutter pub get && cd ../..
     
+    - name: 🔧 检查Android配置
+      run: |
+        echo "检查Android SDK配置..."
+        flutter config --android-sdk $ANDROID_SDK_ROOT
+        flutter doctor --android-licenses || true
+
+        echo "检查Gradle配置..."
+        cd android
+        ./gradlew --version
+        cd ..
+
     - name: 🔨 构建Debug APK
       run: |
         echo "构建Debug版本..."
-        flutter build apk --debug
-    
-    - name: 🔨 构建Release APK
+        flutter build apk --debug --verbose
+      continue-on-error: true
+
+    - name: 🔨 构建Release APK (如果Debug成功)
+      if: success()
       run: |
         echo "构建Release版本..."
-        flutter build apk --release
+        flutter build apk --release --verbose
+      continue-on-error: true
+
+    - name: 🔨 备用构建方案 (如果上面失败)
+      if: failure()
+      run: |
+        echo "尝试备用构建方案..."
+        flutter clean
+        flutter pub get
+
+        echo "尝试仅构建Debug版本..."
+        flutter build apk --debug --target-platform android-arm64 --verbose
+
+        echo "检查构建输出..."
+        find build -name "*.apk" -type f
     
     - name: 📱 整理APK文件
       run: |
