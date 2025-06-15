@@ -1,0 +1,105 @@
+name: 简单构建APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      description:
+        description: '构建描述'
+        required: false
+        default: 'DLNA修复版本'
+
+jobs:
+  build:
+    name: 构建APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v4
+    
+    - name: ☕ 设置Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: 🐦 设置Flutter (最新stable)
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+    
+    - name: 📋 显示版本信息
+      run: |
+        echo "=== 环境信息 ==="
+        flutter --version
+        dart --version
+        java -version
+        echo "==================="
+    
+    - name: 🔧 Flutter环境检查
+      run: flutter doctor -v
+    
+    - name: 🧹 清理项目
+      run: flutter clean
+    
+    - name: 📦 获取主项目依赖
+      run: |
+        echo "获取主项目依赖..."
+        flutter pub get
+    
+    - name: 📦 获取子包依赖
+      run: |
+        echo "获取API包依赖..."
+        cd packages/api && flutter pub get && cd ../..
+        
+        echo "获取蓝牙包依赖..."
+        cd packages/bluetooth && flutter pub get && cd ../..
+        
+        echo "获取文件选择器包依赖..."
+        cd packages/file_picker && flutter pub get && cd ../..
+        
+        echo "获取视频播放器包依赖..."
+        cd packages/video_player && flutter pub get && cd ../..
+    
+    - name: 🔨 构建Debug APK
+      run: |
+        echo "构建Debug版本..."
+        flutter build apk --debug
+    
+    - name: 🔨 构建Release APK
+      run: |
+        echo "构建Release版本..."
+        flutter build apk --release
+    
+    - name: 📱 整理APK文件
+      run: |
+        mkdir -p output
+        TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+        
+        # 复制APK文件
+        if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+          cp build/app/outputs/flutter-apk/app-debug.apk output/ghosten-player-debug-${TIMESTAMP}.apk
+          echo "✅ Debug APK已生成"
+        fi
+        
+        if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+          cp build/app/outputs/flutter-apk/app-release.apk output/ghosten-player-release-${TIMESTAMP}.apk
+          echo "✅ Release APK已生成"
+        fi
+        
+        echo "📱 生成的APK文件："
+        ls -la output/
+    
+    - name: ⬆️ 上传APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: ghosten-player-dlna-fix-${{ github.run_number }}
+        path: output/*.apk
+        retention-days: 30
+    
+    - name: ✅ 构建完成
+      run: |
+        echo "🎉 构建完成！"
+        echo "📝 描述: ${{ github.event.inputs.description }}"
+        echo "🔗 请在Actions页面的Artifacts中下载APK文件"
