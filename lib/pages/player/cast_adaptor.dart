@@ -13,7 +13,17 @@ class CastAdaptor extends Cast {
 
   @override
   Stream<List<CastDeviceAdaptor>> discover() {
-    return Api.dlnaDiscover().map((data) => data.map(CastDeviceAdaptor.fromJson).toList());
+    return Api.dlnaDiscover()
+        .timeout(const Duration(seconds: 30))
+        .handleError((error) {
+          print('DLNA Discovery Error: $error');
+          // 重新抛出错误以便UI层处理
+          throw error;
+        })
+        .map((data) {
+          print('DLNA Discovery Data: $data');
+          return data.map(CastDeviceAdaptor.fromJson).toList();
+        });
   }
 }
 

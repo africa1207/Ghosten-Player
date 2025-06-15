@@ -550,22 +550,43 @@ class PlayerCastSearcher extends StatelessWidget {
           } else if (snapshot.hasError) {
             return errorWidget(context, snapshot.error);
           } else if (snapshot.connectionState != ConnectionState.done) {
-            return const Column(
+            return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Center(
+                const Center(
                   child: Padding(
                     padding: EdgeInsets.all(32),
                     child: CircularProgressIndicator(),
                   ),
+                ),
+                const Text(
+                  '正在搜索DLNA设备...',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '请确保设备与手机在同一局域网内',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
                 ),
               ],
             );
           } else {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 26),
-              child: ListTile(
-                title: Text(noResultText ?? '未搜索到投屏设备', textAlign: TextAlign.center),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    title: Text(noResultText ?? '未搜索到投屏设备', textAlign: TextAlign.center),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '请检查：\n• 设备是否支持DLNA/UPnP\n• 设备是否在同一WiFi网络\n• 设备的DLNA功能是否已开启',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             );
           }

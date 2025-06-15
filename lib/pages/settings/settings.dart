@@ -20,6 +20,7 @@ import 'settings_player_history.dart';
 import 'settings_server.dart';
 import 'settings_sponsor.dart';
 import 'settings_updater.dart';
+import 'dlna_diagnostics_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -86,6 +87,11 @@ class SettingsPage extends StatelessWidget {
             AppLocalizations.of(context)!.settingsItemNetworkDiagnotics,
             Icons.rule_rounded,
             onTap: () => navigateTo(context, const SettingsDiagnotics()),
+          ),
+          _buildItem(
+            'DLNA网络诊断',
+            Icons.cast_outlined,
+            onTap: () => navigateTo(context, const DlnaDiagnosticsPage()),
           ),
           _buildItem(
             AppLocalizations.of(context)!.settingsItemLog,

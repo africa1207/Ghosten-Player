@@ -1,0 +1,97 @@
+name: 手动构建APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      description:
+        description: '构建描述（可选）'
+        required: false
+        default: 'DLNA修复版本'
+
+jobs:
+  build:
+    name: 构建Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v4
+    
+    - name: ☕ 设置Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: 🐦 设置Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.3'
+        channel: 'stable'
+        cache: true
+    
+    - name: 📦 安装依赖
+      run: |
+        flutter pub get
+        flutter pub get --directory=packages/api
+        flutter pub get --directory=packages/bluetooth
+        flutter pub get --directory=packages/file_picker
+        flutter pub get --directory=packages/video_player
+    
+    - name: 🔧 Flutter检查
+      run: flutter doctor -v
+    
+    - name: 🧹 清理缓存
+      run: flutter clean
+    
+    - name: 🔨 构建Debug APK
+      run: |
+        echo "开始构建Debug版本..."
+        flutter build apk --debug --target-platform android-arm64
+        flutter build apk --debug --split-per-abi
+    
+    - name: 📱 构建Release APK  
+      run: |
+        echo "开始构建Release版本..."
+        flutter build apk --release --target-platform android-arm64
+        flutter build apk --release --split-per-abi
+    
+    - name: 📋 整理APK文件
+      run: |
+        mkdir -p release
+        TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+        
+        # Debug版本
+        if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+          cp build/app/outputs/flutter-apk/app-debug.apk release/ghosten-player-debug-${TIMESTAMP}.apk
+        fi
+        
+        if [ -f "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk" ]; then
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk release/ghosten-player-arm64-debug-${TIMESTAMP}.apk
+        fi
+        
+        # Release版本
+        if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+          cp build/app/outputs/flutter-apk/app-release.apk release/ghosten-player-release-${TIMESTAMP}.apk
+        fi
+        
+        if [ -f "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk" ]; then
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk release/ghosten-player-arm64-release-${TIMESTAMP}.apk
+        fi
+        
+        echo "📱 构建的APK文件："
+        ls -la release/
+    
+    - name: ⬆️ 上传APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: ghosten-player-apk-${{ github.run_number }}
+        path: release/*.apk
+        retention-days: 30
+    
+    - name: ✅ 构建完成
+      run: |
+        echo "🎉 构建完成！"
+        echo "📝 描述: ${{ github.event.inputs.description }}"
+        echo "🔗 下载链接将在Actions页面的Artifacts中提供"
+        echo "📱 包含Debug和Release两个版本"
